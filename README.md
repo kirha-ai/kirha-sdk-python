@@ -148,6 +148,13 @@ uv run pytest
 
 `uv run pytest -m integration` runs the tests against the live API with your `KIRHA_API_KEY`. They spend credits.
 
+### Releasing
+
+1. Bump `version` in `pyproject.toml` (for example `uv version 0.2.0`) and merge it to `main`.
+2. Create a GitHub release with a tag matching that version, prefixed with `v` (for example `v0.2.0`).
+
+Publishing the release runs the [publish workflow](https://github.com/kirha-ai/kirha-sdk-python/actions/workflows/publish.yml), which checks that the tag matches the package version, runs the tests, builds the package and uploads it to [PyPI](https://pypi.org/project/kirha/) through trusted publishing. No PyPI token is stored in the repository.
+
 ## License
 
 MIT
