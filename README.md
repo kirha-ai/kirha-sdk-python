@@ -97,9 +97,14 @@ A plan expires 5 minutes after it is created. To run it from another process, af
 tools = kirha.tools(focus="crypto")
 print([tool.name for tool in tools])
 
+matched = kirha.match("what is the price of a coin", focus="crypto")
+print([tool.name for tool in matched])
+
 result = kirha.execute_tool("coingecko_searchCoin", {"query": "avax", "limit": 1})
 print(result.output)
 ```
+
+`tools()` also takes `provider`, `page` and `limit`; `tools_page()` returns the same tools with the `total`, `limit` and `skip` of the window. `kirha.get(tool_name)` reads a single tool.
 
 ### Async
 

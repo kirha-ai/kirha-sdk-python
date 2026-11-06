@@ -26,10 +26,13 @@ from ._models import (
     Summarization,
     Tool,
     ToolExecutionResult,
+    ToolPage,
     Usage,
     parse_plan,
     parse_search_result,
+    parse_tool,
     parse_tool_execution_result,
+    parse_tool_page,
     parse_tools,
 )
 
@@ -157,6 +160,25 @@ class _BaseClient:
             include_planning=include_planning,
         )
 
+    def _tools_params(
+        self,
+        focus: str | None,
+        provider: str | None,
+        page: int | None,
+        limit: int | None,
+    ) -> dict[str, Any]:
+        return _compact(
+            vertical_id=self._resolve_focus(focus),
+            provider=provider or None,
+            page=page,
+            limit=limit,
+        )
+
+    def _match_params(
+        self, query: str, focus: str | None, limit: int | None
+    ) -> dict[str, Any]:
+        return _compact(q=query, vertical_id=self._resolve_focus(focus), limit=limit)
+
     def _resolve_focus(self, focus: str | None) -> str | None:
         return (self._focus if focus is None else focus) or None
 
@@ -239,10 +261,45 @@ class Kirha(_BaseClient):
                 raise PlanExpiredError(plan_id) from error
             raise
 
-    def tools(self, *, focus: str) -> list[Tool]:
+    def tools(
+        self,
+        *,
+        focus: str | None = None,
+        provider: str | None = None,
+        page: int | None = None,
+        limit: int | None = None,
+    ) -> list[Tool]:
+        return self.tools_page(
+            focus=focus, provider=provider, page=page, limit=limit
+        ).tools
+
+    def tools_page(
+        self,
+        *,
+        focus: str | None = None,
+        provider: str | None = None,
+        page: int | None = None,
+        limit: int | None = None,
+    ) -> ToolPage:
         return self._request(
-            "GET", "/tools/v1", parse_tools, params={"vertical_id": focus}
+            "GET",
+            "/tools/v1",
+            parse_tool_page,
+            params=self._tools_params(focus, provider, page, limit),
         )
+
+    def match(
+        self, query: str, *, focus: str | None = None, limit: int | None = None
+    ) -> list[Tool]:
+        return self._request(
+            "GET",
+            "/tools/v1/match",
+            parse_tools,
+            params=self._match_params(query, focus, limit),
+        )
+
+    def get(self, tool_name: str) -> Tool:
+        return self._request("GET", f"/tools/v1/{tool_name}", parse_tool)
 
     def execute_tool(
         self, tool_name: str, input: dict[str, Any] | None = None
@@ -343,10 +400,46 @@ class AsyncKirha(_BaseClient):
                 raise PlanExpiredError(plan_id) from error
             raise
 
-    async def tools(self, *, focus: str) -> list[Tool]:
-        return await self._request(
-            "GET", "/tools/v1", parse_tools, params={"vertical_id": focus}
+    async def tools(
+        self,
+        *,
+        focus: str | None = None,
+        provider: str | None = None,
+        page: int | None = None,
+        limit: int | None = None,
+    ) -> list[Tool]:
+        page_result = await self.tools_page(
+            focus=focus, provider=provider, page=page, limit=limit
         )
+        return page_result.tools
+
+    async def tools_page(
+        self,
+        *,
+        focus: str | None = None,
+        provider: str | None = None,
+        page: int | None = None,
+        limit: int | None = None,
+    ) -> ToolPage:
+        return await self._request(
+            "GET",
+            "/tools/v1",
+            parse_tool_page,
+            params=self._tools_params(focus, provider, page, limit),
+        )
+
+    async def match(
+        self, query: str, *, focus: str | None = None, limit: int | None = None
+    ) -> list[Tool]:
+        return await self._request(
+            "GET",
+            "/tools/v1/match",
+            parse_tools,
+            params=self._match_params(query, focus, limit),
+        )
+
+    async def get(self, tool_name: str) -> Tool:
+        return await self._request("GET", f"/tools/v1/{tool_name}", parse_tool)
 
     async def execute_tool(
         self, tool_name: str, input: dict[str, Any] | None = None
