@@ -123,7 +123,7 @@ def parse_tools(data: Any) -> list[Tool]:
             input_schema=tool.get("input_schema") or {},
             output_schema=tool.get("output_schema") or {},
         )
-        for tool in data
+        for tool in data["tools"]
     ]
 
 

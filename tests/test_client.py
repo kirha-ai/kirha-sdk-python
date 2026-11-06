@@ -184,14 +184,19 @@ def test_expired_plan(respx_mock: respx.MockRouter) -> None:
 
 def test_tools(respx_mock: respx.MockRouter) -> None:
     respx_mock.get(f"{API}/tools/v1", params={"vertical_id": "crypto"}).respond(
-        json=[
-            {
-                "id": "tool_1",
-                "name": "coingecko_searchCoin",
-                "description": "Search coins",
-                "input_schema": {"type": "object"},
-            }
-        ]
+        json={
+            "tools": [
+                {
+                    "id": "tool_1",
+                    "name": "coingecko_searchCoin",
+                    "description": "Search coins",
+                    "input_schema": {"type": "object"},
+                }
+            ],
+            "total": 1,
+            "limit": 1,
+            "skip": 0,
+        }
     )
 
     tools = Kirha(api_key="test-key").tools(focus="crypto")
@@ -337,7 +342,9 @@ async def test_async_client(respx_mock: respx.MockRouter) -> None:
     search_route = respx_mock.post(f"{API}/search/v1").respond(json=SEARCH)
     respx_mock.post(f"{API}/search/v1/plan").respond(json=PLAN)
     run_route = respx_mock.post(f"{API}/search/v1/plan/run").respond(json=SEARCH)
-    respx_mock.get(f"{API}/tools/v1").respond(json=[])
+    respx_mock.get(f"{API}/tools/v1").respond(
+        json={"tools": [], "total": 0, "limit": 0, "skip": 0}
+    )
     respx_mock.post(f"{API}/tools/v1/execute").respond(json=TOOL_RESULT)
 
     async with AsyncKirha(api_key="test-key", summarization=True) as kirha:
