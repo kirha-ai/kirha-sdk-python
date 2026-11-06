@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from typing import Any, Literal, TypedDict
 
 PlanningRuntime = Literal["standard", "fast"]
@@ -57,6 +57,10 @@ class Tool:
     output_schema: dict[str, Any] = field(default_factory=dict)
     related: bool = False
     related_to: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ToolDetails(Tool):
     related_tools: list[str] = field(default_factory=list)
 
 
@@ -138,6 +142,13 @@ def parse_tool(data: Any) -> Tool:
         output_schema=data.get("output_schema") or {},
         related=data.get("related") or False,
         related_to=data.get("related_to") or [],
+    )
+
+
+def parse_tool_details(data: Any) -> ToolDetails:
+    base = parse_tool(data)
+    return ToolDetails(
+        **{f.name: getattr(base, f.name) for f in fields(base)},
         related_tools=data.get("related_tools") or [],
     )
 

@@ -19,6 +19,7 @@ from kirha import (
     PlanStep,
     RateLimitError,
     Tool,
+    ToolDetails,
     Usage,
 )
 
@@ -211,6 +212,7 @@ def test_tools(respx_mock: respx.MockRouter) -> None:
     tools = Kirha(api_key="test-key").tools(focus="crypto")
 
     assert queried(route) == {"vertical_id": "crypto"}
+    assert not hasattr(tools[0], "related_tools")
     assert tools == [
         Tool(
             id="tool_1",
@@ -257,19 +259,20 @@ def test_match(respx_mock: respx.MockRouter) -> None:
         json={"tools": [TOOL, RELATED_TOOL], "total": 2, "limit": 10, "skip": 0}
     )
 
-    tools = Kirha(api_key="test-key").match("price of avax", focus="crypto", limit=10)
+    page = Kirha(api_key="test-key").match("price of avax", focus="crypto", limit=10)
 
     assert queried(route) == {
         "q": "price of avax",
         "vertical_id": "crypto",
         "limit": "10",
     }
-    assert (tools[0].related, tools[0].related_to) == (False, [])
-    assert (tools[1].name, tools[1].related, tools[1].related_to) == (
-        "coingecko_getCoinPrice",
-        True,
-        ["coingecko_searchCoin"],
-    )
+    assert (page.total, page.limit, page.skip) == (2, 10, 0)
+    assert (page.tools[0].related, page.tools[0].related_to) == (False, [])
+    assert (
+        page.tools[1].name,
+        page.tools[1].related,
+        page.tools[1].related_to,
+    ) == ("coingecko_getCoinPrice", True, ["coingecko_searchCoin"])
 
 
 def test_match_without_ranking(respx_mock: respx.MockRouter) -> None:
@@ -277,7 +280,9 @@ def test_match_without_ranking(respx_mock: respx.MockRouter) -> None:
         json={"tools": [], "total": 0, "limit": 10, "skip": 0}
     )
 
-    assert Kirha(api_key="test-key").match("price of avax") == []
+    page = Kirha(api_key="test-key").match("price of avax")
+
+    assert (page.tools, page.total) == ([], 0)
     assert queried(route) == {"q": "price of avax"}
 
 
@@ -287,6 +292,8 @@ def test_get(respx_mock: respx.MockRouter) -> None:
     )
 
     tool = Kirha(api_key="test-key").get("coingecko_searchCoin")
+
+    assert isinstance(tool, ToolDetails)
 
     assert (tool.name, tool.provider, tool.credits_per_call) == (
         "coingecko_searchCoin",
@@ -471,7 +478,8 @@ async def test_async_client(respx_mock: respx.MockRouter) -> None:
     assert [t.name for t in tools] == ["coingecko_searchCoin"]
     assert (page.total, page.skip) == (416, 40)
     assert queried(match_route) == {"q": "price of avax", "vertical_id": "crypto"}
-    assert (matched[1].related, matched[1].related_to) == (
+    assert matched.total == 2
+    assert (matched.tools[1].related, matched.tools[1].related_to) == (
         True,
         ["coingecko_searchCoin"],
     )

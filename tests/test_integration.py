@@ -60,8 +60,9 @@ def test_match_and_get() -> None:
         matched = kirha.match("find a coin by name", focus="crypto", limit=5)
         tool = kirha.get("coingecko_searchCoin")
 
-    assert matched
-    assert all(tool.provider for tool in matched)
+    assert matched.tools
+    assert (matched.limit, matched.skip) == (5, 0)
+    assert all(matched_tool.provider for matched_tool in matched.tools)
     assert tool.name == "coingecko_searchCoin"
     assert tool.provider == "coingecko"
 

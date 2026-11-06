@@ -25,15 +25,15 @@ from ._models import (
     SearchResult,
     Summarization,
     Tool,
+    ToolDetails,
     ToolExecutionResult,
     ToolPage,
     Usage,
     parse_plan,
     parse_search_result,
-    parse_tool,
+    parse_tool_details,
     parse_tool_execution_result,
     parse_tool_page,
-    parse_tools,
 )
 
 BASE_URL = "https://api.kirha.com"
@@ -290,16 +290,16 @@ class Kirha(_BaseClient):
 
     def match(
         self, query: str, *, focus: str | None = None, limit: int | None = None
-    ) -> list[Tool]:
+    ) -> ToolPage:
         return self._request(
             "GET",
             "/tools/v1/match",
-            parse_tools,
+            parse_tool_page,
             params=self._match_params(query, focus, limit),
         )
 
-    def get(self, tool_name: str) -> Tool:
-        return self._request("GET", f"/tools/v1/{tool_name}", parse_tool)
+    def get(self, tool_name: str) -> ToolDetails:
+        return self._request("GET", f"/tools/v1/{tool_name}", parse_tool_details)
 
     def execute_tool(
         self, tool_name: str, input: dict[str, Any] | None = None
@@ -430,16 +430,16 @@ class AsyncKirha(_BaseClient):
 
     async def match(
         self, query: str, *, focus: str | None = None, limit: int | None = None
-    ) -> list[Tool]:
+    ) -> ToolPage:
         return await self._request(
             "GET",
             "/tools/v1/match",
-            parse_tools,
+            parse_tool_page,
             params=self._match_params(query, focus, limit),
         )
 
-    async def get(self, tool_name: str) -> Tool:
-        return await self._request("GET", f"/tools/v1/{tool_name}", parse_tool)
+    async def get(self, tool_name: str) -> ToolDetails:
+        return await self._request("GET", f"/tools/v1/{tool_name}", parse_tool_details)
 
     async def execute_tool(
         self, tool_name: str, input: dict[str, Any] | None = None

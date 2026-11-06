@@ -98,7 +98,7 @@ tools = kirha.tools(focus="crypto")
 print([tool.name for tool in tools])
 
 matched = kirha.match("what is the price of a coin", focus="crypto")
-print([tool.name for tool in matched])
+print([tool.name for tool in matched.tools])
 
 result = kirha.execute_tool("coingecko_searchCoin", {"query": "avax", "limit": 1})
 print(result.output)

@@ -9,7 +9,7 @@ page = kirha.tools_page(focus="crypto", page=1, limit=20)
 print(page.total, page.limit, page.skip)
 
 matched = kirha.match("what is the price of a coin", focus="crypto", limit=5)
-print([(tool.name, tool.related, tool.related_to) for tool in matched])
+print([(tool.name, tool.related, tool.related_to) for tool in matched.tools])
 
 tool = kirha.get("coingecko_searchCoin")
 print(tool.provider, tool.credits_per_call, tool.related_tools)

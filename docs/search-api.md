@@ -216,7 +216,6 @@ Without `page` and `limit`, the whole list comes back in one call.
 | `output_schema` | `dict[str, Any]` | JSON Schema of the tool output |
 | `related` | `bool` | `True` when `match()` surfaced the tool through relation expansion |
 | `related_to` | `list[str]` | Names of the ranked tools that brought it in |
-| `related_tools` | `list[str]` | Other tools of the same provider, filled by `get()` only |
 
 ---
 
@@ -246,7 +245,9 @@ print(page.total, page.limit, page.skip)
 Rank the catalogue against an intent written in plain language.
 
 ```python
-for tool in kirha.match("what is the price of a coin", focus="crypto"):
+page = kirha.match("what is the price of a coin", focus="crypto")
+
+for tool in page.tools:
     print(tool.name, tool.related, tool.related_to)
 ```
 
@@ -258,9 +259,11 @@ for tool in kirha.match("what is the price of a coin", focus="crypto"):
 | `focus` | `str` | Constructor value | Vertical slug, empty for the whole catalogue |
 | `limit` | `int` | `10` | Tools to return, from 1 to 50 |
 
-#### Returns: `list[Tool]`
+#### Returns: `ToolPage`
 
-Ranked tools first, then the tools that relation expansion brought in — those carry `related=True` and `related_to`, the names of the ranked tools that pulled them in. A catalogue with no ranking returns an empty list.
+`total` is what the ranking returned, `limit` the `limit` asked for, `skip` always `0`.
+
+Ranked tools come first in `tools`, then the ones that relation expansion brought in — those carry `related=True` and `related_to`, the names of the ranked tools that pulled them in. A catalogue with no ranking returns an empty page, not an error.
 
 ---
 
@@ -274,9 +277,11 @@ tool = kirha.get("coingecko_searchCoin")
 print(tool.credits_per_call, tool.related_tools)
 ```
 
-#### Returns: `Tool`
+#### Returns: `ToolDetails`
 
-`related_tools` holds the names of the other tools of the same provider. An unknown name, or a name without its provider prefix, raises `ApiError` with status 404.
+Every `Tool` field, plus `related_tools` (`list[str]`): the names of the other tools of the same provider. That field exists on `ToolDetails` only — a `Tool` read from `tools()` or `match()` does not carry it.
+
+An unknown name, or a name without its provider prefix, raises `ApiError` with status 404.
 
 ---
 
