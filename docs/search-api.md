@@ -181,9 +181,9 @@ Takes the same keyword arguments as `plan.execute()`, with `summarization` defau
 
 ---
 
-### `tools(*, focus)`
+### `tools(...)`
 
-List the tools of a vertical.
+List the tools of the catalogue.
 
 ```python
 tools = kirha.tools(focus="crypto")
@@ -194,9 +194,14 @@ for tool in tools:
 
 #### Keyword arguments
 
-| Argument | Type | Required | Description |
-|----------|------|----------|-------------|
-| `focus` | `str` | Yes | Vertical slug (`crypto`, `insurance`, `company`, ...) |
+| Argument | Type | Default | Description |
+|----------|------|---------|-------------|
+| `focus` | `str` | Constructor value | Vertical slug (`crypto`, `insurance`, `company`, ...), empty for the whole catalogue |
+| `provider` | `str` | All providers | Provider slug (`coingecko`, `defillama`, ...) |
+| `page` | `int` | — | Page number, from 1 to 1000 |
+| `limit` | `int` | `20` when `page` is sent | Tools per page, from 1 to 100 |
+
+Without `page` and `limit`, the whole list comes back in one call.
 
 #### Returns: `list[Tool]`
 
@@ -205,8 +210,78 @@ for tool in tools:
 | `id` | `str` | Tool identifier |
 | `name` | `str` | Tool name |
 | `description` | `str` | Tool description |
+| `provider` | `str` | Provider slug |
+| `credits_per_call` | `int` | Credits spent per call, `0` when free |
 | `input_schema` | `dict[str, Any]` | JSON Schema of the tool input |
 | `output_schema` | `dict[str, Any]` | JSON Schema of the tool output |
+| `related` | `bool` | `True` when `match()` surfaced the tool through relation expansion |
+| `related_to` | `list[str]` | Names of the ranked tools that brought it in |
+
+---
+
+### `tools_page(...)`
+
+Same arguments and same tools as `tools()`, plus the pagination window.
+
+```python
+page = kirha.tools_page(focus="crypto", page=3)
+
+print(page.total, page.limit, page.skip)
+```
+
+#### Returns: `ToolPage`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `tools` | `list[Tool]` | The tools of this window |
+| `total` | `int` | Tools matching the filter, all pages together |
+| `limit` | `int` | Window size actually applied |
+| `skip` | `int` | Tools skipped before this window |
+
+---
+
+### `match(query, *, focus=None, limit=None)`
+
+Rank the catalogue against an intent written in plain language.
+
+```python
+page = kirha.match("what is the price of a coin", focus="crypto")
+
+for tool in page.tools:
+    print(tool.name, tool.related, tool.related_to)
+```
+
+#### Arguments
+
+| Argument | Type | Default | Description |
+|----------|------|---------|-------------|
+| `query` | `str` | Required | The intent, in plain language |
+| `focus` | `str` | Constructor value | Vertical slug, empty for the whole catalogue |
+| `limit` | `int` | `10` | Tools to return, from 1 to 50 |
+
+#### Returns: `ToolPage`
+
+`total` is what the ranking returned, `limit` the `limit` asked for, `skip` always `0`.
+
+Ranked tools come first in `tools`, then the ones that relation expansion brought in — those carry `related=True` and `related_to`, the names of the ranked tools that pulled them in. A catalogue with no ranking returns an empty page, not an error.
+
+---
+
+### `get(tool_name)`
+
+Read one tool by name.
+
+```python
+tool = kirha.get("coingecko_searchCoin")
+
+print(tool.credits_per_call, tool.related_tools)
+```
+
+#### Returns: `ToolDetails`
+
+Every `Tool` field, plus `related_tools` (`list[str]`): the names of the other tools of the same provider. That field exists on `ToolDetails` only — a `Tool` read from `tools()` or `match()` does not carry it.
+
+An unknown name, or a name without its provider prefix, raises `ApiError` with status 404.
 
 ---
 

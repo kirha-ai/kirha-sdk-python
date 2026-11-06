@@ -16,7 +16,9 @@ from ._models import (
     SearchResult,
     Summarization,
     Tool,
+    ToolDetails,
     ToolExecutionResult,
+    ToolPage,
     Usage,
 )
 
@@ -39,6 +41,8 @@ __all__ = [
     "SearchResult",
     "Summarization",
     "Tool",
+    "ToolDetails",
     "ToolExecutionResult",
+    "ToolPage",
     "Usage",
 ]

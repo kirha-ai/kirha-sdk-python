@@ -19,6 +19,7 @@ from kirha import (
     PlanStep,
     RateLimitError,
     Tool,
+    ToolDetails,
     Usage,
 )
 
@@ -54,6 +55,23 @@ PLAN = {
     "usage": {"estimated": 5, "consumed": 0},
     "account": ACCOUNT,
 }
+TOOL = {
+    "id": "tool_1",
+    "name": "coingecko_searchCoin",
+    "description": "Search coins",
+    "provider": "coingecko",
+    "credits_per_call": 2,
+    "input_schema": {"type": "object"},
+}
+RELATED_TOOL = {
+    "id": "tool_2",
+    "name": "coingecko_getCoinPrice",
+    "description": "Get a coin price",
+    "provider": "coingecko",
+    "credits_per_call": 1,
+    "related": True,
+    "related_to": ["coingecko_searchCoin"],
+}
 TOOL_RESULT = {
     "tool_name": "coingecko_searchCoin",
     "output": {"coins": []},
@@ -65,6 +83,10 @@ EXPIRED = {"type": "CONVERSATION_TURN_TIMEOUT", "reason": "Plan expired."}
 
 def sent(route: respx.Route) -> Any:
     return json.loads(route.calls.last.request.content)
+
+
+def queried(route: respx.Route) -> dict[str, str]:
+    return dict(route.calls.last.request.url.params)
 
 
 def test_search(respx_mock: respx.MockRouter) -> None:
@@ -183,27 +205,113 @@ def test_expired_plan(respx_mock: respx.MockRouter) -> None:
 
 
 def test_tools(respx_mock: respx.MockRouter) -> None:
-    respx_mock.get(f"{API}/tools/v1", params={"vertical_id": "crypto"}).respond(
-        json=[
-            {
-                "id": "tool_1",
-                "name": "coingecko_searchCoin",
-                "description": "Search coins",
-                "input_schema": {"type": "object"},
-            }
-        ]
+    route = respx_mock.get(f"{API}/tools/v1").respond(
+        json={"tools": [TOOL], "total": 1, "limit": 1, "skip": 0}
     )
 
     tools = Kirha(api_key="test-key").tools(focus="crypto")
 
+    assert queried(route) == {"vertical_id": "crypto"}
+    assert not hasattr(tools[0], "related_tools")
     assert tools == [
         Tool(
             id="tool_1",
             name="coingecko_searchCoin",
             description="Search coins",
+            provider="coingecko",
+            credits_per_call=2,
             input_schema={"type": "object"},
         )
     ]
+
+
+def test_tools_filters(respx_mock: respx.MockRouter) -> None:
+    route = respx_mock.get(f"{API}/tools/v1").respond(
+        json={"tools": [TOOL], "total": 416, "limit": 20, "skip": 40}
+    )
+    kirha = Kirha(api_key="test-key")
+
+    kirha.tools(focus="crypto", provider="coingecko", page=3, limit=20)
+    assert queried(route) == {
+        "vertical_id": "crypto",
+        "provider": "coingecko",
+        "page": "3",
+        "limit": "20",
+    }
+
+    kirha.tools(focus="")
+    assert queried(route) == {}
+
+
+def test_tools_page(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get(f"{API}/tools/v1").respond(
+        json={"tools": [TOOL], "total": 416, "limit": 20, "skip": 40}
+    )
+
+    page = Kirha(api_key="test-key").tools_page(focus="crypto", page=3)
+
+    assert (page.total, page.limit, page.skip) == (416, 20, 40)
+    assert [tool.name for tool in page.tools] == ["coingecko_searchCoin"]
+
+
+def test_match(respx_mock: respx.MockRouter) -> None:
+    route = respx_mock.get(f"{API}/tools/v1/match").respond(
+        json={"tools": [TOOL, RELATED_TOOL], "total": 2, "limit": 10, "skip": 0}
+    )
+
+    page = Kirha(api_key="test-key").match("price of avax", focus="crypto", limit=10)
+
+    assert queried(route) == {
+        "q": "price of avax",
+        "vertical_id": "crypto",
+        "limit": "10",
+    }
+    assert (page.total, page.limit, page.skip) == (2, 10, 0)
+    assert (page.tools[0].related, page.tools[0].related_to) == (False, [])
+    assert (
+        page.tools[1].name,
+        page.tools[1].related,
+        page.tools[1].related_to,
+    ) == ("coingecko_getCoinPrice", True, ["coingecko_searchCoin"])
+
+
+def test_match_without_ranking(respx_mock: respx.MockRouter) -> None:
+    route = respx_mock.get(f"{API}/tools/v1/match").respond(
+        json={"tools": [], "total": 0, "limit": 10, "skip": 0}
+    )
+
+    page = Kirha(api_key="test-key").match("price of avax")
+
+    assert (page.tools, page.total) == ([], 0)
+    assert queried(route) == {"q": "price of avax"}
+
+
+def test_get(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get(f"{API}/tools/v1/coingecko_searchCoin").respond(
+        json={**TOOL, "related_tools": ["coingecko_getCoinPrice"]}
+    )
+
+    tool = Kirha(api_key="test-key").get("coingecko_searchCoin")
+
+    assert isinstance(tool, ToolDetails)
+
+    assert (tool.name, tool.provider, tool.credits_per_call) == (
+        "coingecko_searchCoin",
+        "coingecko",
+        2,
+    )
+    assert tool.related_tools == ["coingecko_getCoinPrice"]
+
+
+def test_get_unknown(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get(f"{API}/tools/v1/nope").respond(
+        404, json={"type": "NOT_FOUND", "reason": "Tool not found."}
+    )
+
+    with pytest.raises(ApiError) as caught:
+        Kirha(api_key="test-key").get("nope")
+
+    assert (caught.value.status_code, caught.value.code) == (404, "NOT_FOUND")
 
 
 def test_execute_tool(respx_mock: respx.MockRouter) -> None:
@@ -337,7 +445,15 @@ async def test_async_client(respx_mock: respx.MockRouter) -> None:
     search_route = respx_mock.post(f"{API}/search/v1").respond(json=SEARCH)
     respx_mock.post(f"{API}/search/v1/plan").respond(json=PLAN)
     run_route = respx_mock.post(f"{API}/search/v1/plan/run").respond(json=SEARCH)
-    respx_mock.get(f"{API}/tools/v1").respond(json=[])
+    respx_mock.get(f"{API}/tools/v1").respond(
+        json={"tools": [TOOL], "total": 416, "limit": 20, "skip": 40}
+    )
+    match_route = respx_mock.get(f"{API}/tools/v1/match").respond(
+        json={"tools": [TOOL, RELATED_TOOL], "total": 2, "limit": 10, "skip": 0}
+    )
+    respx_mock.get(f"{API}/tools/v1/coingecko_searchCoin").respond(
+        json={**TOOL, "related_tools": ["coingecko_getCoinPrice"]}
+    )
     respx_mock.post(f"{API}/tools/v1/execute").respond(json=TOOL_RESULT)
 
     async with AsyncKirha(api_key="test-key", summarization=True) as kirha:
@@ -345,6 +461,9 @@ async def test_async_client(respx_mock: respx.MockRouter) -> None:
         plan = await kirha.plan("query")
         executed = await plan.execute()
         tools = await kirha.tools(focus="crypto")
+        page = await kirha.tools_page(focus="crypto", page=3)
+        matched = await kirha.match("price of avax", focus="crypto")
+        tool = await kirha.get("coingecko_searchCoin")
         tool_result = await kirha.execute_tool("coingecko_searchCoin")
 
     assert sent(search_route) == {
@@ -356,7 +475,15 @@ async def test_async_client(respx_mock: respx.MockRouter) -> None:
     assert plan.status == "pending_confirmation"
     assert sent(run_route) == {"id": "search_1", "summarization": {"enable": True}}
     assert executed.id == "search_1"
-    assert tools == []
+    assert [t.name for t in tools] == ["coingecko_searchCoin"]
+    assert (page.total, page.skip) == (416, 40)
+    assert queried(match_route) == {"q": "price of avax", "vertical_id": "crypto"}
+    assert matched.total == 2
+    assert (matched.tools[1].related, matched.tools[1].related_to) == (
+        True,
+        ["coingecko_searchCoin"],
+    )
+    assert tool.related_tools == ["coingecko_getCoinPrice"]
     assert tool_result.tool_name == "coingecko_searchCoin"
 
 

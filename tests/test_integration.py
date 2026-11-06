@@ -43,13 +43,28 @@ def test_plan_and_execute() -> None:
 def test_tools() -> None:
     with Kirha() as kirha:
         tools = kirha.tools(focus="crypto")
+        page = kirha.tools_page(focus="crypto", page=1, limit=5)
         result = kirha.execute_tool(
             "coingecko_searchCoin", {"query": "avax", "limit": 1}
         )
 
     assert any(tool.name == "coingecko_searchCoin" for tool in tools)
+    assert (len(page.tools), page.limit, page.skip) == (5, 5, 0)
+    assert page.total >= len(page.tools)
     assert not result.is_error
     assert result.output
+
+
+def test_match_and_get() -> None:
+    with Kirha() as kirha:
+        matched = kirha.match("find a coin by name", focus="crypto", limit=5)
+        tool = kirha.get("coingecko_searchCoin")
+
+    assert matched.tools
+    assert (matched.limit, matched.skip) == (5, 0)
+    assert all(matched_tool.provider for matched_tool in matched.tools)
+    assert tool.name == "coingecko_searchCoin"
+    assert tool.provider == "coingecko"
 
 
 @pytest.mark.anyio

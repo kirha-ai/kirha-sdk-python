@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from typing import Any, Literal, TypedDict
 
 PlanningRuntime = Literal["standard", "fast"]
@@ -51,8 +51,25 @@ class Tool:
     id: str
     name: str
     description: str
+    provider: str
+    credits_per_call: int
     input_schema: dict[str, Any] = field(default_factory=dict)
     output_schema: dict[str, Any] = field(default_factory=dict)
+    related: bool = False
+    related_to: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ToolDetails(Tool):
+    related_tools: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ToolPage:
+    tools: list[Tool]
+    total: int
+    limit: int
+    skip: int
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -114,17 +131,39 @@ def parse_plan(data: Any) -> dict[str, Any]:
     }
 
 
+def parse_tool(data: Any) -> Tool:
+    return Tool(
+        id=data["id"],
+        name=data["name"],
+        description=data["description"],
+        provider=data["provider"],
+        credits_per_call=data["credits_per_call"],
+        input_schema=data.get("input_schema") or {},
+        output_schema=data.get("output_schema") or {},
+        related=data.get("related") or False,
+        related_to=data.get("related_to") or [],
+    )
+
+
+def parse_tool_details(data: Any) -> ToolDetails:
+    base = parse_tool(data)
+    return ToolDetails(
+        **{f.name: getattr(base, f.name) for f in fields(base)},
+        related_tools=data.get("related_tools") or [],
+    )
+
+
 def parse_tools(data: Any) -> list[Tool]:
-    return [
-        Tool(
-            id=tool["id"],
-            name=tool["name"],
-            description=tool["description"],
-            input_schema=tool.get("input_schema") or {},
-            output_schema=tool.get("output_schema") or {},
-        )
-        for tool in data
-    ]
+    return [parse_tool(tool) for tool in data["tools"]]
+
+
+def parse_tool_page(data: Any) -> ToolPage:
+    return ToolPage(
+        tools=parse_tools(data),
+        total=data["total"],
+        limit=data["limit"],
+        skip=data["skip"],
+    )
 
 
 def parse_tool_execution_result(data: Any) -> ToolExecutionResult:
